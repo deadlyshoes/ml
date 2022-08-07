@@ -3,11 +3,11 @@
 
 class NeuralNetwork {
 public:
-    NeuralNetwork(int input_size, std::vector<int> nodes_per_hidden_layer, float learning_rate);
+    NeuralNetwork(int input_size, int output_size, std::vector<int> nodes_per_hidden_layer, float learning_rate);
     ~NeuralNetwork();
 
-    void train(std::vector<std::vector<float>> X, std::vector<float> Y);
-    float predict(std::vector<float> x);
+    void train(std::vector<std::vector<float>> X, std::vector<std::vector<float>> Y);
+    std::vector<float> predict(std::vector<float> x);
 private:
     struct Node {
         std::vector<float> w;
@@ -21,6 +21,7 @@ private:
     };
 
     int input_size;
+    int output_size;
     std::vector<int> nodes_per_hidden_layer;
     std::vector<Layer> layers;
     float learning_rate;
@@ -28,4 +29,5 @@ private:
     void backpropagate();
     void calculate_gradient();
     void update_w();
+    std::vector<float> output_layer_to_vector();
 };
