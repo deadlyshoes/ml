@@ -32,6 +32,7 @@ NeuralNetwork::NeuralNetwork(int input_size, int output_size, std::vector<int> n
         Node node;
         output_layer.nodes.push_back(node);
     }
+    layers.push_back(output_layer);
 }
 
 NeuralNetwork::~NeuralNetwork() {
@@ -129,4 +130,9 @@ std::vector<float> NeuralNetwork::predict(std::vector<float> x) {
     }
 
     return this->output_layer_to_vector();
+}
+
+std::vector<Layer> NeuralNetwork::get_layers()
+{
+    return this->layers;
 }
