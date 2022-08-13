@@ -12,13 +12,22 @@
 #include <string>
 
 #include "nn.h"
-#include "Popup.h"
-#include "Text.h"
 
 class Render {
 public:
 	Render();
 	void draw(std::vector<Layer> layers);
 private:
+	struct NodeInfo {
+		bool in;
+		unsigned int nLayer;
+		unsigned int nNode;
+	};
+
 	GLFWwindow* window;
+	float xRadius, yRadius;
+	float nodeScale;
+	std::vector<std::vector<std::pair<float, float>>> nodesCenter;
+
+	void updateActiveNode(NodeInfo* nodeInfo);
 };

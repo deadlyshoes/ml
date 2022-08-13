@@ -1,8 +1,50 @@
 #include "render.h"
 #include "Shader.h"
 
+#include <imgui.h>
+#include <backends/imgui_impl_glfw.h>
+#include <backends/imgui_impl_opengl3.h>
+
 const float SRC_WIDTH = 800.0f;
 const float SRC_HEIGHT = 600.0f;
+
+double mouseXPos, mouseYPos;
+bool clicked = false;
+bool ignoreMouse = false;
+
+void Render::updateActiveNode(Render::NodeInfo* nodeInfo)
+{
+	for (int i = 0; i < nodesCenter.size(); i++)
+	{
+		for (int j = 0; j < nodesCenter[i].size(); j++)
+		{
+			float x = (nodesCenter[i][j].first + 1.0f) * SRC_WIDTH / 2 - mouseXPos;
+			float y = (nodesCenter[i][j].second + 1.0f) * SRC_HEIGHT / 2 - mouseYPos;
+
+			float radius = xRadius * (SRC_WIDTH / 2) * nodeScale;
+
+			std::cout << "x: " << x << " y: " << y << std::endl;
+			std::cout << "radius: " << radius << std::endl;
+
+			if (x * x + y * y <= radius * radius)
+			{
+				nodeInfo->in = true;
+				nodeInfo->nLayer = i;
+				nodeInfo->nNode = j;
+				return;
+			}
+		}
+	}
+}
+
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
+{
+	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS && !ignoreMouse)
+	{
+		glfwGetCursorPos(window, &mouseXPos, &mouseYPos);
+		clicked = true;
+	}
+}
 
 Render::Render()
 {
@@ -19,11 +61,20 @@ Render::Render()
 		return;
 	}
 
+	glfwSetMouseButtonCallback(window, mouse_button_callback);
+
 	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
 	{
 		std::cout << "Failed to initialize GLAD" << std::endl;
 		return;
 	}
+
+	ImGui::CreateContext();
+
+	ImGui::StyleColorsDark();
+	
+	ImGui_ImplGlfw_InitForOpenGL(window, true);
+	ImGui_ImplOpenGL3_Init("#version 330 core");
 }
 
 void Render::draw(std::vector<Layer> layers) {
@@ -36,8 +87,8 @@ void Render::draw(std::vector<Layer> layers) {
 	glGenVertexArrays(1, &VAO);
 
 	// if x is smaller, then y should be changed
-	const float xRadius = std::min(1.0f, SRC_HEIGHT / SRC_WIDTH);
-	const float yRadius = std::min(1.0f, SRC_WIDTH / SRC_HEIGHT);
+	xRadius = std::min(1.0f, SRC_HEIGHT / SRC_WIDTH);
+	yRadius = std::min(1.0f, SRC_WIDTH / SRC_HEIGHT);
 
 	unsigned int SEGMENTS = 64;
 	float PI = 3.14159265359f;
@@ -64,16 +115,7 @@ void Render::draw(std::vector<Layer> layers) {
 		indices.push_back(0);
 		indices.push_back(i);
 		indices.push_back(i + 2);
-
-		//std::cout << positions[0].x << " {" << positions[i].x << ", " << positions[i].y << "} " << positions[i + 1].x << ", " << positions[i + 1].y << "}" << std::endl;
 	}
-
-	/*for (auto i : indices) {
-		std::cout << i << std::endl;
-	}*/
-
-	//std::cout << positions.size() << " " << indices.size() << std::endl;
-	//std::reverse(positions.begin(), positions.end());
 
 	glBindVertexArray(VAO);
 	glBindBuffer(GL_ARRAY_BUFFER, VBO);
@@ -96,34 +138,81 @@ void Render::draw(std::vector<Layer> layers) {
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    Popup popup(0, 0, 300, 150, "content");
+	ImGuiIO& io = ImGui::GetIO();
 
-    Text textRenderer = Text();
+	NodeInfo nodeInfo;
+	nodeInfo.in = false;
 
 	while (!glfwWindowShouldClose(window)) {
+		if (io.WantCaptureMouse)
+			ignoreMouse = true;
+		glfwPollEvents();
+		ignoreMouse = false;
+
+		ImGui_ImplOpenGL3_NewFrame();
+		ImGui_ImplGlfw_NewFrame();
+		ImGui::NewFrame();
+
+		{
+			static float f = 0.0f;
+			static int counter = 0;
+
+			ImGui::Begin("Node info");
+			if (!nodeInfo.in)
+			{
+				ImGui::Text("Click on a node");
+			}
+			else
+			{
+				const Node& node = layers[nodeInfo.nLayer].nodes[nodeInfo.nNode];
+				ImGui::Text("delta: %f", node.delta);
+				ImGui::Text("output: %f", node.output);
+				if (ImGui::TreeNode("w"))
+				{
+					for (const float& x : node.w)
+					{
+						ImGui::Text("%f", x);
+					}
+					ImGui::TreePop();
+				}
+				if (ImGui::TreeNode("error gradient"))
+				{
+					for (const float& x : node.error_gradient)
+					{
+						ImGui::Text("%f", x);
+					}
+					ImGui::TreePop();
+				}
+			}
+
+			ImGui::End();
+		}
+
+		ImGui::Render();
+
 		glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		nodeShader.use();
 		glBindVertexArray(VAO);
 
-		std::vector<std::vector<std::pair<float, float>>> nodesCenter;
+		this->nodesCenter.clear();
 
 		const int nLayers = layers.size();
 		float layerStride = 2.0f / (float)nLayers;
 		//std::cout << nLayers << " " << layerStride << std::endl;
-		float nodeScale = 1.0f / (2 * nLayers);
+		nodeScale = 1.0f / (2 * nLayers);
 		for (int i = 0; i < nLayers; i++) {
 			const int nNodes = layers[i].nodes.size();
 			float nodeStride = 2.0f / nNodes;
-			nodesCenter.push_back(std::vector<std::pair<float, float>>());
+			this->nodesCenter.push_back(std::vector<std::pair<float, float>>());
 			for (int j = 0; j < nNodes; j++) {
 				glm::mat4 model = glm::mat4(1.0f);
 				model = glm::translate(model, glm::vec3(-1.0f + layerStride / 2.0f, 0.0f, 0.0f));
 				model = glm::translate(model, glm::vec3(i * layerStride, 0.0f, 0.0f));
 				model = glm::translate(model, glm::vec3(0.0f, -yRadius + nodeStride / 2.0f, 0.0f));
 				model = glm::translate(model, glm::vec3(0.0f, j * nodeStride, 0.0f));
-				nodesCenter.back().push_back({-1.0f + layerStride / 2.0f + i * layerStride, -1.0f + nodeStride / 2.0f + j * nodeStride});
+				this->nodesCenter.back().push_back({-1.0f + layerStride / 2.0f + i * layerStride, -1.0f + nodeStride / 2.0f + j * nodeStride});
 				model = glm::scale(model, glm::vec3(nodeScale));
 				nodeShader.setMat4("model", model);
 				glDrawElements(GL_TRIANGLE_STRIP, indices.size(), GL_UNSIGNED_INT, (void*)0);
@@ -132,8 +221,8 @@ void Render::draw(std::vector<Layer> layers) {
 		for (int i = 0; i < nLayers - 1; i++) {
 			for (int j = 0; j < layers[i].nodes.size(); j++) {
 				for (int k = 0; k < layers[i+1].nodes.size(); k++) {
-					std::pair<float, float> A = nodesCenter[i][j];
-					std::pair<float, float> B = nodesCenter[i+1][k];
+					std::pair<float, float> A = this->nodesCenter[i][j];
+					std::pair<float, float> B = this->nodesCenter[i+1][k];
 
 					std::vector<float> center(6);
 					center[0] = A.first;
@@ -154,24 +243,25 @@ void Render::draw(std::vector<Layer> layers) {
 			}
 		}
 
-		for (int i = 0; i < nLayers; i++) {
-			for (int j = 0; j < layers[i].nodes.size(); j++) {
-				const std::string text = std::to_string(layers[i].nodes[j].output);
-
-				float x = (nodesCenter[i][j].first + 1) * SRC_WIDTH / 2;
-				float y = (nodesCenter[i][j].second + 1) * SRC_HEIGHT / 2;
-
-                textRenderer.draw(text, x, y, 1.0f, glm::vec3(0.5f, 0.5f, 0.5f));
-			}
-		}
-
 		glBindVertexArray(0);
 		glBindTexture(GL_TEXTURE_2D, 0);
 
-        popup.draw();
+		if (clicked)
+		{
+			updateActiveNode(&nodeInfo);
+			std::cout << "layer: " << nodeInfo.nLayer << " node: " << nodeInfo.nNode << std::endl;
+			std::cout << "node updated" << std::endl;
+			clicked = false;
+		}
+
+		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
 		glfwSwapBuffers(window);
-		glfwPollEvents();
 	}
+	ImGui_ImplOpenGL3_Shutdown();
+	ImGui_ImplGlfw_Shutdown();
+	ImGui::DestroyContext();
+
+	glfwDestroyWindow(window);
 	glfwTerminate();
 }
