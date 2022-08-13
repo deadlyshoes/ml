@@ -4,6 +4,7 @@
 #pragma once
 
 struct Node {
+    std::string activation_function;
     std::vector<float> w;
     std::vector<float> error_gradient;
     float output;
@@ -16,7 +17,7 @@ struct Layer {
 
 class NeuralNetwork {
 public:
-    NeuralNetwork(int input_size, int output_size, std::vector<int> nodes_per_hidden_layer, float learning_rate);
+    NeuralNetwork(int input_size, int output_size, std::vector<int> nodes_per_hidden_layer, std::vector<std::string> activations_per_hidden_layer, float learning_rate);
     ~NeuralNetwork();
 
     void train(std::vector<std::vector<float>> X, std::vector<std::vector<float>> Y);
@@ -27,6 +28,7 @@ private:
     int input_size;
     int output_size;
     std::vector<int> nodes_per_hidden_layer;
+    std::vector<std::string> activations_per_hidden_layer;
     std::vector<Layer> layers;
     float learning_rate;
 
